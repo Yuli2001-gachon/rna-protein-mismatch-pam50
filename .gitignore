@@ -1,0 +1,7 @@
+inputdata/
+code/table/
+code/figure/
+*.html
+.Rhistory
+.RData
+.Rproj.user/
