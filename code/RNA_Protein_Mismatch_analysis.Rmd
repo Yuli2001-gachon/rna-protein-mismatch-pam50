@@ -17,7 +17,7 @@ output: html_document
 ## 2026-10-20 : 초록 300단어 이내로 축약 ; Table S14 (B)·(C) → Supplementary Data 7 분리.
 ## 2026-11-02 (교수님 지시) : 주 지표를 macro balanced accuracy -> macro F1 으로 변경. 섹션 4 classification_metrics_fun 에
 ##   Precision·Recall·F1(subtype별)·Macro_F1 추가, primary_metric 변수 도입(inner mtry 선택·사전 지정 paired 비교·민감도·예산 스윕 모두 참조).
-##   MBA·Accuracy·Kappa 는 보조 지표로 Table 2 에 유지, Table 4 는 precision/recall/F1 중심으로 교체,
+##   MBA 를 보조 지표로 Table 2·3 에 함께 보고(Accuracy·Kappa 는 계산만 하고 표에서는 제외, 2026-11-25), Table 4 는 precision/recall/F1 중심으로 교체,
 ##   chance level 서술은 상수 Luminal A 예측(constant_majority_reference)을 참조 기준으로 교체. 마커 수준 one-vs-rest AUC(섹션 18~20)는 유지.
 ##   -> 전체 재실행 필요 (inner-fold mtry 선택 지표가 바뀌므로 fold 결과가 달라질 수 있음).
 ## 2026-10-19 추가 : 섹션 21B (LumB 외 아형의 mismatch 특징·클래스 균형 RF, 구 code/09 통합 → Table S19, Figure S6).
@@ -753,10 +753,12 @@ metric_vector_fun <- function(observed, predicted) {
 
 # 주 지표 (2026-11-02 변경 : Macro_Balanced_Accuracy -> Macro_F1).
 # inner-fold mtry 선택, 모든 사전 지정 paired 비교, 민감도 분석, 예산 스윕이 이 변수를 참조한다.
-# MBA·Accuracy·Kappa는 보조 지표로 Table 2에 함께 보고하고, 마커 수준 one-vs-rest AUC(섹션 18~20)는 그대로 유지한다.
+# 보조 지표는 MBA 하나만 Table 2·3에 보고한다(reported_metrics). Accuracy·Kappa는 계산·저장만 하고 표에서는 뺀다(2026-11-25, 원고와 일치).
+# 마커 수준 one-vs-rest AUC(섹션 18~20)는 그대로 유지한다.
 primary_metric <- "Macro_F1"
 primary_metric_label <- "macro F1"
 secondary_metrics <- c("Macro_Balanced_Accuracy", "Accuracy", "Kappa")
+reported_metrics  <- c(primary_metric, "Macro_Balanced_Accuracy")  # Table 2·3 에 싣는 지표
 
 # 무정보 분류기 기준값 : MBA는 어떤 무정보 분류기든 0.5지만 macro F1은 그렇지 않으므로,
 # 가장 흔한 subtype(Luminal A)만 예측하는 상수 분류기의 값을 참조 기준으로 함께 보고한다.
@@ -1190,7 +1192,7 @@ paired_diff_fun <- function(pm, enhanced, baseline, metrics = metric_names) {
 
 main_metric <- boot_metric_fun(prediction_wide, model_names)
 
-model_comparison_results <- metric_ci_fun(main_metric) %>%
+model_comparison_results <- metric_ci_fun(main_metric, metrics = reported_metrics) %>%
   pivot_wider(
     names_from = Metric,
     values_from = c(Estimate, CI_Lower, CI_Upper),
@@ -1206,8 +1208,8 @@ save_table_fun(
   caption = paste(
     "Table 2. Nested cross-validation performance of the seven",
     "modality models, with 95% bootstrap confidence intervals.",
-    "Macro F1 (primary metric) with macro balanced accuracy, accuracy and",
-    "Cohen's kappa as secondary metrics. Reference: a constant Luminal A",
+    "Macro F1 is the primary metric; macro balanced accuracy (MBA) is a",
+    "secondary metric. Reference: a constant Luminal A",
     sprintf("prediction gives macro F1 = %.3f and macro balanced accuracy = %.3f.",
             constant_majority_reference[["Macro_F1"]],
             constant_majority_reference[["Macro_Balanced_Accuracy"]])
@@ -1228,7 +1230,8 @@ comparison_specification <- tribble(
 paired_bootstrap_comparisons <- map2_dfr(
   comparison_specification$Enhanced_Model,
   comparison_specification$Baseline_Model,
-  function(enhanced, baseline) paired_diff_fun(main_metric, enhanced, baseline)
+  function(enhanced, baseline) paired_diff_fun(main_metric, enhanced, baseline,
+                                              metrics = reported_metrics)
 ) %>%
   transmute(
     Comparison, Metric, Difference, CI_Lower, CI_Upper,
@@ -1243,7 +1246,7 @@ save_table_fun(
   caption = paste(
     "Table 3. Paired bootstrap comparison of the effect of adding",
     "RNA-protein mismatch features to each baseline model.",
-    "Primary endpoint: macro F1; the remaining metrics are secondary."
+    "Primary endpoint: macro F1; macro balanced accuracy (MBA) is secondary."
   ),
   digits = 4
 )
